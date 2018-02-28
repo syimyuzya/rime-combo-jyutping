@@ -1,0 +1,145 @@
+# Rime schema
+# encoding: utf-8
+
+schema:
+  schema_id: combo_jyutping
+  name: 宮保粵拼
+  version: "0.1"
+  author:
+    - 东南西北
+    - 思無邪SyiMyuZya <syimyuzya@gmail.com>
+  description: |
+    並擊輸入粵拼，基於宮保拼音設計
+
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [ 中文, 西文 ]
+  - name: full_shape
+    states: [ 半角, 全角 ]
+  - name: simplification
+    states: [ 漢字, 汉字 ]
+  - name: ascii_punct
+    states: [ 。，, ．， ]
+
+engine:
+  processors:
+    - ascii_composer
+    - recognizer
+    - chord_composer  # 實現並擊按鍵處理
+    - key_binder
+    - speller
+    - punctuator
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - ascii_segmentor
+    - matcher
+    - abc_segmentor
+    - punct_segmentor
+    - fallback_segmentor
+  translators:
+    - punct_translator
+    - script_translator
+  filters:
+    - simplifier
+    - uniquifier
+
+speller:
+  alphabet: zyxwvutsrqponmlkjihgfedcba
+  delimiter: " '"
+  algebra:
+    - erase/^xx$/
+
+chord_composer:
+  # 字母表，包含用於並擊的按鍵
+  # 擊鍵雖有先後，形成並擊時，一律以字母表順序排列
+  alphabet: "swxdecfrvgtbjum ki,lo."
+  # 拼寫運算規則，將一組並擊編碼轉換爲拼音音節
+  algebra:
+    # 先將物理按鍵字符對應到宮保粵拼鍵位中的拼音字母
+    # Q 為空白鍵「變音」；AYE 為 aa, yu, oe/eo；UI 為尾 -u, -i；
+    # J 為下排尾 -i；NGM 為尾 -n, -ng, -m； PTK 為尾 -p, -t, -k
+    - 'xlit|swxdecfrvgtbjum ki,lo.|sczhlfgdbktpiuYQUIJNGM|'
+    # 變換聲母、韻母部分
+    # 組合聲母
+    - xform/^zf/gw/
+    - xform/^cl/kw/
+    - xform/^sh/w/
+    - xform/^fb/m/
+    - xform/^ld/n/
+    - xform/^hg/ng/
+    - xform/^[gh]k/j/
+    # 空格鍵單擊時產生空白
+    - 'xform/^Q$/ /'
+    # <變音>與下排尾 -i 輸入單獨 <aa>
+    - xform/^QJ$/A/
+    # <yu> 與下排尾 -i 單用亦可
+    - xform/^YJ$/A/
+    # <yu>-<m> 輸入 aam
+    - xform/^YM$/AM/
+    # 單擊時產生字符 , .
+    - xform/^J$/,/
+    - xform/^M$/./
+    # 入聲韻尾
+    - xform/JM$/P/
+    - xform/IG$/K/
+    - xform/UN$/T/
+    # 下排尾 -i 併入尾 -i
+    - xform/J$/I/
+    # 默認主元音 aa
+    - xform/^([bpmfdtnlgkhwzcsj]|ng|[gk]w)?(?![AiuY,. bpmfdtnlgkhwzcsj])/$1A/
+    # 主元音變音
+    - xform/iQ/e/
+    - xform/uQ/o/
+    - xform/YQ/E/
+    - xform/AQ/a/
+    # eoi 不用變音
+    - xform/YI$/EI/
+    # 鼻音節 m, ng
+    - xform/^ma$/m/
+    - xform/^nga$/ng/
+    # gw, kw 接 u 時同 g, k
+    - "xform/^([gk])wu/$1u/"
+    # 拼寫規則
+    - xform/^i/ji/
+    - xform/^u/wu/
+    - xform/^Y/jY/
+    # 變換為粵拼
+    - xform/E(?=[INT])/eo/
+    - "xlit|UINMPTK|uinmptk|"
+    - xform/A/aa/
+    - xform/Y/yu/
+    - xform/E/oe/
+    - xform/G/ng/
+  # 並擊完成後套用的式樣
+  output_format:
+    # 判斷音節結構，追加隔音符號
+    # TODO 更嚴格的判斷？
+    - "xform/^((?:aa?|e)(?:[iumnptk]|ng)|aa|e|oek?|oeng|eo[int]|i[umnptk]?|ing|yu[nt]?|[ou][intk]?|[ou]ng|ou)$/$1'/"
+    - "xform/^((?:[bpmfdtnlgkhzcs]|ng)(?:(?:aa?|e)(?:[iumnptk]|ng)|aa|e|oek?|oeng|eo[int]|i[umnptk]?|ing|yu[nt]?|[ou][intk]?|[ou]ng|ou))$/$1'/"
+    - "xform/^(j(?:(?:aa?|e)(?:[iumnptk]|ng)|aa|e|oek?|oeng|eo[int]|i[umnptk]?|ing|yu[nt]?|o[int]?|ong|uk|ung))$/$1'/"
+    - "xform/^(w(?:(?:aa?|e)(?:[iumnptk]|ng)|aa|e|i[umnptk]?|ing|yu[nt]?|ok|ong|u[int]?))$/$1'/"
+    - "xform/^([gk]w(?:(?:aa?|e)(?:[iumnptk]|ng)|aa|e|i[umnptk]?|ing|yu[nt]?|ok|ong?))$/$1'/"
+    - "xform/^(m|ng)$/$1'/"
+    # 消除不構成合法音節的並擊組合
+    - "erase/^([A-Za-z]+)$/"
+  # 並擊過程中套用的式樣
+  prompt_format:
+    # 加方括弧
+    - "xform/^(.*)$/[$1]/"
+
+translator:
+  dictionary: jyutping
+  prism: combo_jyutping
+  preedit_format:
+
+punctuator:
+  import_preset: default
+
+key_binder:
+  import_preset: default
+
+recognizer:
+  import_preset: default
